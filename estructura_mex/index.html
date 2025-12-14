@@ -351,91 +351,101 @@
 
     <!-- Scripts -->
     <script>
-        // --- SECURE LLM CONFIGURATION ---
-            const apiUrl = '/api/chat';
+       // --- SECURE LLM CONFIGURATION ---
+    const apiUrl = '/api/chat';
 
-       /**
- * Fetches a response from your secure Vercel backend.
- */
-         async function fetchGeminiResponse(query, maxRetries = 3) {
-    const payload = { 
-        query: query, 
-        topic: "impuesto_herencia" // <--- Selects Estructura Mexicanos persona
-    };
+    /**
+     * Función para conectar con tu backend seguro en Vercel
+     */
+    async function fetchGeminiResponse(query, maxRetries = 3) {
+        // Enviamos el tema específico para esta infografía
+        const payload = { 
+            query: query, 
+            topic: "impuesto_herencia" 
+        };
 
-         for (let i = 0; i < maxRetries; i++) {
-             try {
-                const response = await fetch(apiUrl, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify(payload)
-                 });
-
-                 if (!response.ok) {
-                   // Handle rate limits or server errors
-                  throw new Error(`Server error: ${response.status}`);
-                 }
-
-                 return response.json();
-
-             } catch (error) {
-                 console.error("Attempt failed:", error);
-                 if (i === maxRetries - 1) throw error;
-                 // Simple wait before retry
-                 await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); 
-             }
-         }
-     }
-        // --- Gemini API Call Logic ---
-        async function callGemini(query) {
-            const loadingIndicator = document.getElementById('loading-indicator');
-            const aiResponseElement = document.getElementById('ai-response');
-            const consultButton = document.getElementById('consult-button');
-            
-            aiResponseElement.textContent = '';
-            loadingIndicator.classList.remove('hidden');
-            consultButton.disabled = true;
-            consultButton.textContent = 'Consultando...';
-
-            const payload = {
-                contents: [{ parts: [{ text: query }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-            };
-
+        for (let i = 0; i < maxRetries; i++) {
             try {
-                const response = await fetchWithBackoff(apiUrl, {
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
-                const result = await response.json();
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Error: No se pudo generar la respuesta o el término es demasiado ambiguo.";
-                aiResponseElement.textContent = text;
+                if (!response.ok) {
+                    throw new Error(`Error del servidor: ${response.status}`);
+                }
+
+                return response.json();
+
             } catch (error) {
-                aiResponseElement.textContent = `Error en la comunicación con el consultor: ${error.message}. Intente de nuevo.`;
-            } finally {
-                loadingIndicator.classList.add('hidden');
-                consultButton.disabled = false;
-                consultButton.textContent = 'Consultar';
+                console.error("Intento fallido:", error);
+                if (i === maxRetries - 1) throw error;
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); 
             }
         }
+    }
 
-        // --- Event Listeners for AI Panel ---
-        document.getElementById('ai-header').addEventListener('click', () => {
-            const panel = document.getElementById('ai-panel');
-            const content = document.getElementById('ai-content');
-            const toggle = document.getElementById('ai-toggle');
+    // --- Lógica de Interfaz de Usuario (UI) ---
+    async function handleConsultation() {
+        const inputElement = document.getElementById('term-input');
+        const aiResponseElement = document.getElementById('ai-response');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const consultButton = document.getElementById('consult-button');
+        
+        const query = inputElement.value.trim();
+        if (!query) {
+            aiResponseElement.textContent = "Por favor, ingrese un término para consultar.";
+            return;
+        }
+
+        // Estado de "Cargando"
+        aiResponseElement.textContent = '';
+        loadingIndicator.classList.remove('hidden');
+        consultButton.disabled = true;
+        consultButton.textContent = 'Consultando...';
+
+        try {
+            // AQUÍ ESTABA EL ERROR: Llamamos a la función correcta ahora
+            const result = await fetchGeminiResponse(query);
             
-            panel.classList.toggle('collapsed');
-            if (panel.classList.contains('collapsed')) {
-                content.classList.add('hidden');
-                toggle.textContent = '+';
-            } else {
-                content.classList.remove('hidden');
-                toggle.textContent = '−';
-            }
-        });
+            // Extraer el texto de la respuesta de Gemini
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "No se pudo obtener una respuesta clara. Intente ser más específico.";
+            aiResponseElement.textContent = text;
+
+        } catch (error) {
+            aiResponseElement.textContent = `Error de conexión: ${error.message}. Por favor intente nuevamente.`;
+        } finally {
+            // Restaurar estado
+            loadingIndicator.classList.add('hidden');
+            consultButton.disabled = false;
+            consultButton.textContent = 'Consultar';
+        }
+    }
+
+    // --- Event Listeners ---
+    document.getElementById('ai-header').addEventListener('click', () => {
+        const panel = document.getElementById('ai-panel');
+        const content = document.getElementById('ai-content');
+        const toggle = document.getElementById('ai-toggle');
+        
+        panel.classList.toggle('collapsed');
+        if (panel.classList.contains('collapsed')) {
+            content.classList.add('hidden');
+            toggle.textContent = '+';
+        } else {
+            content.classList.remove('hidden');
+            toggle.textContent = '−';
+        }
+    });
+
+    document.getElementById('consult-button').addEventListener('click', handleConsultation);
+    
+    document.getElementById('term-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            handleConsultation();
+        }
+    });
 
         document.getElementById('consult-button').addEventListener('click', () => {
             const query = document.getElementById('term-input').value.trim();
