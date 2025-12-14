@@ -449,9 +449,11 @@ const apiUrl = '/api/chat';
       * Fetches a response from your secure Vercel backend.
       */
      async function fetchGeminiResponse(query, maxRetries = 3) {
-         // We send only the query. The backend handles the System Prompt and Tools.
-         const payload = { query: query };
-
+    // We send the query AND the topic ID
+    const payload = { 
+        query: query, 
+        topic: "tax_strategy"  // <--- MATCHES THE KEY IN YOUR BACKEND
+    };
          for (let i = 0; i < maxRetries; i++) {
              try {
                  const response = await fetch(apiUrl, {
@@ -759,3 +761,4 @@ const apiUrl = '/api/chat';
     </script>
 </body>
 </html>
+
