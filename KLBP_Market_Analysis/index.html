@@ -263,7 +263,7 @@
         <!-- Header/Toggle Bar -->
         <div id="ai-panel-header" class="p-3 bg-slate-50 rounded-t-[7px] cursor-pointer flex justify-between items-center select-none" onclick="togglePanel()">
             <h3 class="text-lg font-bold text-slate-900 flex items-center">
-                <span class="mr-2 text-orange-500">✨</span> Market & Submarket Analyst
+                <span class="mr-2 text-orange-500">✨</span> Market Analyst
             </h3>
             <span id="toggle-icon" class="text-xl text-sky-600 transform transition duration-300 rotate-180">▲</span>
         </div>
@@ -276,7 +276,7 @@
 
             <!-- Input -->
             <div class="flex flex-col gap-2 mb-4">
-                <input type="text" id="taxQueryInput" placeholder="e.g., What is the current industrial construction pipeline size?" 
+                <input type="text" id="taxQueryInput" placeholder="e.g., What does NNN mean?" 
                        class="p-2 text-sm border border-slate-300 rounded focus:ring-sky-500 focus:border-sky-500">
                 <button id="askTaxButton" 
                         class="bg-orange-500 text-white font-bold py-2 px-4 rounded hover:bg-orange-600 transition duration-150 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center text-sm">
@@ -433,7 +433,7 @@ const apiUrl = '/api/chat';
             } finally {
                 // Reset state
                 askTaxButton.disabled = false;
-                buttonText.textContent = 'Analyze Tax Implication ✨';
+                buttonText.textContent = 'Ask Market Analyst 🔍';
                 loadingIndicator.classList.add('hidden');
             }
         });
