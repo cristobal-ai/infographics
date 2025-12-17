@@ -26,6 +26,26 @@
         }
       }
     </script>
+         /* Floating AI Panel Style */
+        #ai-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 80vh;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            border-top: 5px solid #2D7DD2;
+        }
+        #ai-panel.collapsed {
+            max-height: 50px;
+            overflow: hidden;
+            width: 250px;
+        }
     <style>
       body {
         font-family: 'Inter', sans-serif;
@@ -237,7 +257,188 @@
     </div>
     </footer>
 
+    <!-- SECTION 7: MARKET & SUBMARKET ANALYST (Floating Panel) -->
+    <div id="ai-panel" class="collapsed">
+        <!-- Header/Toggle Bar -->
+        <div id="ai-panel-header" class="p-3 bg-slate-50 rounded-t-[7px] cursor-pointer flex justify-between items-center select-none" onclick="togglePanel()">
+            <h3 class="text-lg font-bold text-slate-900 flex items-center">
+                <span class="mr-2 text-orange-500">✨</span> Market & Submarket Analyst
+            </h3>
+            <span id="toggle-icon" class="text-xl text-sky-600 transform transition duration-300 rotate-180">▲</span>
+        </div>
+
+        <!-- Content Area -->
+        <div id="ai-panel-content" class="p-4 flex flex-col overflow-y-auto" style="height: 100%; box-sizing: border-box;">
+            <p class="text-slate-600 text-sm mb-4">
+                Ask a question about current industrial trends, Houston's economy, or the NW Hwy 6 submarket.
+            </p>
+
+            <!-- Input -->
+            <div class="flex flex-col gap-2 mb-4">
+                <input type="text" id="taxQueryInput" placeholder="e.g., What is the current industrial construction pipeline size?" 
+                       class="p-2 text-sm border border-slate-300 rounded focus:ring-sky-500 focus:border-sky-500">
+                <button id="askTaxButton" 
+                        class="bg-orange-500 text-white font-bold py-2 px-4 rounded hover:bg-orange-600 transition duration-150 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center text-sm">
+                    <span id="buttonText">Ask Market Analyst 🔍</span>
+                </button>
+            </div>
+
+            <!-- Output -->
+            <div id="taxResponseArea" class="mt-2 border border-slate-200 rounded p-3 bg-slate-50 relative flex-grow min-h-[100px]">
+                <div id="loadingIndicator" class="hidden text-center text-sky-600 font-semibold py-4 text-sm">
+                    Searching market intelligence...
+                </div>
+                <p id="responseText" class="text-slate-700 text-sm">Type your real estate market question above and click the button to get a grounded answer.</p>
+                <div id="citationArea" class="mt-4 text-xs text-slate-500"></div>
+            </div>
+        </div>
+    </div>
+
+
     <script>
+        // --- SECURE LLM CONFIGURATION ---
+const apiUrl = '/api/chat';
+        
+        // --- DOM ELEMENTS ---
+        const aiPanel = document.getElementById('ai-panel');
+        const toggleIcon = document.getElementById('toggle-icon');
+        const taxQueryInput = document.getElementById('taxQueryInput');
+        const askTaxButton = document.getElementById('askTaxButton');
+        const buttonText = document.getElementById('buttonText');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const responseText = document.getElementById('responseText');
+        const citationArea = document.getElementById('citationArea');
+
+        // --- PANEL TOGGLE FUNCTION ---
+        window.togglePanel = function() {
+            const isCollapsed = aiPanel.classList.toggle('collapsed');
+            if (isCollapsed) {
+                toggleIcon.style.transform = 'rotate(0deg)';
+                aiPanel.style.maxHeight = '50px';
+            } else {
+                toggleIcon.style.transform = 'rotate(180deg)';
+                aiPanel.style.maxHeight = '80vh';
+            }
+        };
+        
+        // --- UTILITY FUNCTIONS ---
+        
+        // Requirement: Wrap labels > 16 chars
+        function wrapLabel(str, maxLen = 16) {
+            if (str.length <= maxLen) return str;
+            const words = str.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                if ((currentLine + " " + words[i]).length <= maxLen) {
+                    currentLine += " " + words[i];
+                } else {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        }
+
+        /**
+      * Fetches a response from your secure Vercel backend.
+      */
+     async function fetchGeminiResponse(query, maxRetries = 3) {
+    // We send the query AND the topic ID
+    const payload = { 
+        query: query, 
+        topic: "market_analysis"  // <--- MATCHES THE KEY IN YOUR BACKEND
+    };
+         for (let i = 0; i < maxRetries; i++) {
+             try {
+                 const response = await fetch(apiUrl, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify(payload)
+                 });
+
+                 if (!response.ok) {
+                     // Handle rate limits or server errors
+                     throw new Error(`Server error: ${response.status}`);
+                 }
+
+                 return response.json();
+
+             } catch (error) {
+                 console.error("Attempt failed:", error);
+                 if (i === maxRetries - 1) throw error;
+                 // Simple wait before retry
+                 await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); 
+           }
+       }
+    }
+
+        // --- EVENT HANDLER ---
+
+        askTaxButton.addEventListener('click', async () => {
+            const query = taxQueryInput.value.trim();
+            if (!query) {
+                responseText.textContent = "Please enter a question to analyze.";
+                citationArea.innerHTML = "";
+                return;
+            }
+
+            // Set loading state
+            askTaxButton.disabled = true;
+            buttonText.textContent = 'Analyzing...';
+            loadingIndicator.classList.remove('hidden');
+            responseText.textContent = '';
+            citationArea.innerHTML = '';
+
+            try {
+                const result = await fetchGeminiResponse(query);
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    responseText.textContent = text;
+
+                    // Extract and display grounding sources
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    if (sources.length > 0) {
+                        const sourceHtml = sources.map((s, index) => 
+                            `<a href="${s.uri}" target="_blank" class="text-sky-600 hover:text-sky-700 underline">${index + 1}. ${s.title}</a>`
+                        ).join(' | ');
+                        citationArea.innerHTML = `<strong>Sources:</strong> ${sourceHtml}`;
+                    } else {
+                         citationArea.innerHTML = `<em>Note: No specific citations found for this query.</em>`;
+                    }
+                    
+                } else {
+                    responseText.textContent = "Error: Could not retrieve a valid response from the tax consultant model.";
+                }
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                responseText.textContent = `A technical error occurred while consulting the model. Details: ${error.message}`;
+                citationArea.innerHTML = "";
+            } finally {
+                // Reset state
+                askTaxButton.disabled = false;
+                buttonText.textContent = 'Analyze Tax Implication ✨';
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+
+
+        
       const tooltipTitleCallback = (tooltipItems) => {
         const item = tooltipItems[0];
         let label = item.chart.data.labels[item.dataIndex];
