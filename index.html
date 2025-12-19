@@ -10,71 +10,63 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global state for bookmarks
+        const display = document.getElementById('user-id-display');
+        const appId = 'smart-investments-hub';
         window.userBookmarks = new Set();
         let db, auth, userId;
 
-        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-        const appId = window.__app_id || 'smart-investments-hub';
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-
-        // Authentication logic
-        async function initAuth() {
+        async function startApp() {
             try {
-                if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-                    await signInWithCustomToken(auth, window.__initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth error:", error);
+                // 1. Fetch Secure Config from Vercel API
+                const response = await fetch('/api/config');
+                if (!response.ok) throw new Error("Could not fetch cloud config");
+                const firebaseConfig = await response.json();
+
+                // 2. Initialize Firebase with dynamic config
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // 3. Handle Authentication
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        display.textContent = `Client ID: ${userId}`;
+                        display.classList.replace('text-slate-500', 'text-green-500');
+                        setupBookmarkListener();
+                    }
+                });
+
+                await signInAnonymously(auth);
+
+            } catch (err) {
+                console.error(err);
+                display.textContent = "Error: " + err.message;
+                display.classList.add('text-red-500');
             }
         }
 
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                userId = user.uid;
-                document.getElementById('user-id-display').textContent = `Client ID: ${userId}`;
-                setupBookmarkListener();
-            }
-        });
-
-        // Listen for bookmarks in real-time
         function setupBookmarkListener() {
-            if (!userId) return;
             const userDocRef = doc(db, 'artifacts', appId, 'users', userId, 'preferences', 'bookmarks');
-            
             onSnapshot(userDocRef, (docSnap) => {
                 if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    window.userBookmarks = new Set(data.savedIds || []);
-                } else {
-                    window.userBookmarks = new Set();
+                    window.userBookmarks = new Set(docSnap.data().savedIds || []);
                 }
                 updateBookmarkUI();
-            }, (error) => {
-                console.error("Firestore listener error:", error);
+            }, (err) => {
+                display.textContent = "Database Error: Permission Denied";
             });
         }
 
-        // Toggle bookmark function
         window.toggleBookmark = async (e, id) => {
-            e.preventDefault();
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             if (!userId) return;
-
-            if (window.userBookmarks.has(id)) {
-                window.userBookmarks.delete(id);
-            } else {
-                window.userBookmarks.add(id);
-            }
+            
+            if (window.userBookmarks.has(id)) window.userBookmarks.delete(id);
+            else window.userBookmarks.add(id);
 
             const userDocRef = doc(db, 'artifacts', appId, 'users', userId, 'preferences', 'bookmarks');
             await setDoc(userDocRef, { savedIds: Array.from(window.userBookmarks) }, { merge: true });
@@ -85,19 +77,13 @@
             document.querySelectorAll('.bookmark-btn').forEach(btn => {
                 const id = btn.getAttribute('data-id');
                 const icon = btn.querySelector('.star-icon');
-                if (window.userBookmarks.has(id)) {
-                    icon.innerHTML = '★'; // Filled star
-                    icon.classList.add('text-amber-500');
-                    icon.classList.remove('text-slate-300');
-                } else {
-                    icon.innerHTML = '☆'; // Outline star
-                    icon.classList.remove('text-amber-500');
-                    icon.classList.add('text-slate-300');
-                }
+                const isSaved = window.userBookmarks.has(id);
+                icon.innerHTML = isSaved ? '★' : '☆';
+                icon.className = `star-icon text-xl ${isSaved ? 'text-amber-500' : 'text-slate-300'}`;
             });
         }
 
-        initAuth();
+        startApp();
     </script>
 
     <style>
